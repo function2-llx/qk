@@ -6,8 +6,19 @@ import readline from 'readline'
 import puppeteer, { Page } from 'puppeteer'
 import { FateaDM } from 'fateadm'
 import yaml from 'js-yaml'
+import winston from 'winston'
 
-// import './aug'
+const logger = winston.createLogger({
+    level: 'info',
+    format: winston.format.combine(
+        winston.format.timestamp({ format: () => DateTime.now().toISO() }),
+        winston.format.printf(({level, message, timestamp}) => `${timestamp} ${level}: ${message}`),
+    ),
+    transports: [
+        new winston.transports.Console(),
+        new winston.transports.File({ filename: 'bot.log' })
+    ]
+});
 
 interface Conf {
     auth: {
@@ -27,13 +38,7 @@ const fateadm = new FateaDM(conf.fateadm.pd_id, conf.fateadm.pd_key);
 const resultsFolder = 'results' as const;
 if (!fs.existsSync(resultsFolder)) fs.mkdirSync(resultsFolder);
 
-puppeteer.launch({
-    // headless: false,
-    args: [
-        '--disable-web-security',
-        '--disable-features=IsolateOrigins,site-per-process',
-    ],
-}).then(async browser => {
+puppeteer.launch().then(async browser => {
     const rl = readline.createInterface({
         input: process.stdin,
         output: process.stdout,
@@ -52,7 +57,7 @@ puppeteer.launch({
                 // const code = result.Result.toUpperCase();
                 const code: string = await new Promise(resolve => rl.question('manual code: ', answer => resolve(answer.toUpperCase())));
                 console.log('code is', code);
-    
+
                 const authUrl = new URL('https://zhjwxk.cic.tsinghua.edu.cn/j_acegi_formlogin_xsxk.do');
                 authUrl.search = new URLSearchParams({
                     j_username: conf.auth.username,
@@ -81,11 +86,19 @@ puppeteer.launch({
         .then(prop => prop!.jsonValue())
         .then(src => page.goto(src as string));
     
-    // page.waitForSelector('input');
+    await page.waitForXPath('//*[@id="a"]/div/div/div[2]/div[2]/input').then(x => x!.click());
     for (const course of conf.courses) {
+        const promise = new Promise(() => page.once('dialog', dialog => {
+            const msg = dialog.message();
+            console.log(msg);
+            if (msg == '提交选课成功;') console.log(`${course} 选课成功`);
+            else console.log(``)
+            dialog.accept();
+        }));
         await page.waitForSelector(`input[value="${course}"]`).then(x => x!.click());
+        await promise;
     }
-    await page.screenshot({ path: 'screenshot-233.png' });
+
     browser.close();
     rl.close();
 });

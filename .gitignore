@@ -118,3 +118,6 @@ dist
 .pnp.*
 
 conf.yaml
+package-lock.json
+captcha.jpg
+screenshot*.png
