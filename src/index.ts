@@ -6,19 +6,24 @@ import readline from 'readline'
 import puppeteer, { Page } from 'puppeteer'
 import { FateaDM } from 'fateadm'
 import yaml from 'js-yaml'
-import winston from 'winston'
+import winston, { info } from 'winston'
+import { DateTime } from 'luxon'
 
 const logger = winston.createLogger({
     level: 'info',
     format: winston.format.combine(
         winston.format.timestamp({ format: () => DateTime.now().toISO() }),
-        winston.format.printf(({level, message, timestamp}) => `${timestamp} ${level}: ${message}`),
+        winston.format.printf(({level, message, timestamp}) => `${timestamp} [${level.toUpperCase()}] ${message}`),
     ),
     transports: [
         new winston.transports.Console(),
-        new winston.transports.File({ filename: 'bot.log' })
+        new winston.transports.File({ filename: 'qk.log' }),
     ]
 });
+
+async function delay(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 interface Conf {
     auth: {
@@ -54,49 +59,73 @@ puppeteer.launch().then(async browser => {
                 const buffer = await res.buffer();
                 fs.writeFileSync('captcha.jpg', buffer);
                 // const result = await fateadm.recognize(buffer.toString('base64'), '30500');
-                // const code = result.Result.toUpperCase();
-                const code: string = await new Promise(resolve => rl.question('manual code: ', answer => resolve(answer.toUpperCase())));
-                console.log('code is', code);
-
+                // const captcha = result.Result.toUpperCase();
+                const captcha: string = await new Promise(resolve => rl.question('manual captcha: ', answer => resolve(answer.toUpperCase())));
+                logger.info(`验证码：${captcha}`);
+    
                 const authUrl = new URL('https://zhjwxk.cic.tsinghua.edu.cn/j_acegi_formlogin_xsxk.do');
                 authUrl.search = new URLSearchParams({
                     j_username: conf.auth.username,
                     j_password: conf.auth.password,
                     captchaflag: 'login1',
-                    _login_image_: code,
+                    _login_image_: captcha,
                 }).toString();
-                // console.log(authUrl);
                 await page.goto(authUrl.toString());
                 if (page.url() == MAIN_URL) {
-                    fs.writeFileSync(path.join(resultsFolder, `${code}.jpg`), buffer);
+                    fs.writeFileSync(path.join(resultsFolder, `${captcha}.jpg`), buffer);
                     break;
                 }
             }
         }
+        logger.info('登录成功');
         return page;
     }
-    const page = await login();
-    await page.frames().find(frame => frame.name() == 'tree')!
-        .waitForXPath('//*[@id="show"]/li[2]/a')
-        .then(xk => xk!.getProperty('href'))
-        .then(prop => prop!.jsonValue())
-        .then(href => page.goto(href as string));
-    await page.waitForXPath('//*[@id="iframe1"]')
-        .then(iframe => iframe!.getProperty('src'))
-        .then(prop => prop!.jsonValue())
-        .then(src => page.goto(src as string));
-    
-    await page.waitForXPath('//*[@id="a"]/div/div/div[2]/div[2]/input').then(x => x!.click());
-    for (const course of conf.courses) {
-        const promise = new Promise(() => page.once('dialog', dialog => {
-            const msg = dialog.message();
-            console.log(msg);
-            if (msg == '提交选课成功;') console.log(`${course} 选课成功`);
-            else console.log(``)
-            dialog.accept();
-        }));
-        await page.waitForSelector(`input[value="${course}"]`).then(x => x!.click());
-        await promise;
+    const success: string[] = [];
+    while (success.length < conf.courses.length) {
+        try {
+            const page = await login();
+            // 获取“选课操作-选课”对应链接
+            await page.frames().find(frame => frame.name() == 'tree')!
+                .waitForXPath('//*[@id="show"]/li[2]/a')
+                .then(xk => xk!.getProperty('href'))
+                .then(prop => prop!.jsonValue())
+                .then(href => page.goto(href as string));
+            // 进入只显示候选课程列表的页面
+            await page.waitForXPath('//*[@id="iframe1"]')
+                .then(iframe => iframe!.getProperty('src'))
+                .then(prop => prop!.jsonValue())
+                .then(src => page.goto(src as string));
+
+            console.log(conf.courses, success);
+            while (success.length < conf.courses.length) {
+                for (let course of conf.courses) {
+                    if (success.includes(course)) continue;
+                    logger.info(`尝试提交课程：${course}`);
+                    await new Promise(async resolve => {
+                        // 首先注册提交后对话框处理逻辑
+                        page.once('dialog', async dialog => {
+                            const msg = dialog.message();
+                            logger.info(`${course} 提交信息：${msg}`);
+                            if (msg == '提交选课成功;') {
+                                success.push(course);
+                                logger.info(`${course} 选课成功`);
+                            } else {
+                                logger.info(`${course} 提交失败`);
+                            }
+                            resolve(await dialog.accept());
+                        });
+                        // 选择课程
+                        await page.waitForXPath(`//*[@value="${course}"]`).then(x => x!.click());
+                        logger.info('点击提交');
+                        await page.waitForXPath('//*[@id="a"]/div/div/div[2]/div[2]/input').then(x => x!.click());
+                    });
+                    await delay(1000);
+                }
+            }
+        } catch (e) {
+            logger.info(e);
+            await delay(2000);
+        }
     }
 
     browser.close();
