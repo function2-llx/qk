@@ -75,6 +75,8 @@ puppeteer.launch().then(async browser => {
                     fs.writeFileSync(path.join(resultsFolder, `${captcha}.jpg`), buffer);
                     break;
                 }
+                logger.info('登录失败，稍后重试');
+                await delay(1000);
             }
         }
         logger.info('登录成功');
@@ -90,11 +92,12 @@ puppeteer.launch().then(async browser => {
                 .then(xk => xk!.getProperty('href'))
                 .then(prop => prop!.jsonValue())
                 .then(href => page.goto(href as string));
-            // 进入只显示候选课程列表的页面
-            await page.waitForXPath('//*[@id="iframe1"]')
-                .then(iframe => iframe!.getProperty('src'))
-                .then(prop => prop!.jsonValue())
-                .then(src => page.goto(src as string));
+            // // 进入只显示候选课程列表的页面
+            // await page.waitForXPath('//*[@id="iframe1"]')
+            //     .then(iframe => iframe!.getProperty('src'))
+            //     .then(prop => prop!.jsonValue())
+            //     .then(src => page.goto(src as string));
+            const coursesFrame = await page.frames().find(frame => frame.name() == 'fcxkFrm')!;
 
             console.log(conf.courses, success);
             while (success.length < conf.courses.length) {
@@ -115,9 +118,9 @@ puppeteer.launch().then(async browser => {
                             resolve(await dialog.accept());
                         });
                         // 选择课程
-                        await page.waitForXPath(`//*[@value="${course}"]`).then(x => x!.click());
+                        await coursesFrame.waitForXPath(`//*[@value="${course}"]`).then(x => x!.click());
+                        await coursesFrame.waitForXPath('//*[@id="a"]/div/div/div[2]/div[2]/input').then(x => x!.click());
                         logger.info('点击提交');
-                        await page.waitForXPath('//*[@id="a"]/div/div/div[2]/div[2]/input').then(x => x!.click());
                     });
                     await delay(1000);
                 }
