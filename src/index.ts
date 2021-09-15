@@ -57,9 +57,9 @@ puppeteer.launch().then(async browser => {
                 const res = await page.goto('http://zhjwxk.cic.tsinghua.edu.cn/login-jcaptcah.jpg?captchaflag=login1');
                 const buffer = await res.buffer();
                 fs.writeFileSync('captcha.jpg', buffer);
-                // const result = await fateadm.recognize(buffer.toString('base64'), '30500');
-                // const captcha = result.Result.toUpperCase();
-                const captcha = await new Promise(resolve => rl.question('手动输入验证码: ', answer => resolve(answer.toUpperCase())));
+                const result = await fateadm.recognize(buffer.toString('base64'), '30500');
+                const captcha = result.Result.toUpperCase();
+                // const captcha = await new Promise(resolve => rl.question('手动输入验证码: ', answer => resolve(answer.toUpperCase())));
                 return captcha as string;
             };
             for (;;) {
@@ -133,7 +133,7 @@ puppeteer.launch().then(async browser => {
                     if (submitOk) await delay(1000);
                     else {
                         logger.info('状态异常，重新登录');
-                        break;
+                        throw new Error;
                     }
                 }
             }
