@@ -117,6 +117,9 @@ puppeteer.launch().then(async browser => {
                             }
                             resolve(await dialog.accept());
                         });
+
+                        // 处理提交后出现的异常情况（主要是登录掉线）。FIXME: 尚未测试
+                        page.once('response', res => { if (res.status() != 200) throw new Error('状态异常，重新登录') });
                         // 选择课程
                         await coursesFrame.waitForXPath(`//*[@value="${course}"]`).then(x => x!.click());
                         await coursesFrame.waitForXPath('//*[@id="a"]/div/div/div[2]/div[2]/input').then(x => x!.click());
