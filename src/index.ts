@@ -130,7 +130,7 @@ puppeteer.launch().then(async browser => {
                         // 点击提交
                         await coursesFrame.waitForXPath('//*[@id="a"]/div/div/div[2]/div[2]/input').then(x => x!.click());
                         // 处理一些奇怪的未响应情况
-                        setTimeout(() => resolve(false), 10000);
+                        setTimeout(() => resolve(false), 30000);
                         logger.info('点击提交');
                     });
                     if (submitOk) await delay(1000);
