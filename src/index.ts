@@ -122,19 +122,19 @@ puppeteer.launch().then(async browser => {
                             await dialog.accept();
                             resolve(true);
                         });
-
-                        // 处理提交后出现的异常情况（主要是登录掉线）。FIXME: 尚未测试
+                        // 处理提交后出现的异常情况（主要是登录掉线）
+                        page.waitForResponse
                         page.once('response', res => { if (res.status() != 200) resolve(false); });
                         // 选择课程
                         await coursesFrame.waitForXPath(`//*[@value="${course}"]`).then(x => x!.click());
+                        // 点击提交
                         await coursesFrame.waitForXPath('//*[@id="a"]/div/div/div[2]/div[2]/input').then(x => x!.click());
+                        // 处理一些奇怪的未响应情况
+                        setTimeout(() => resolve(false), 10000);
                         logger.info('点击提交');
                     });
                     if (submitOk) await delay(1000);
-                    else {
-                        logger.info('状态异常，重新登录');
-                        throw new Error;
-                    }
+                    else throw new Error('状态异常，重新登录');
                 }
             }
         } catch (e) {
