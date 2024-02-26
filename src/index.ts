@@ -62,7 +62,8 @@ puppeteer.launch({headless: 'new'}).then(async browser => {
     async function login(): Promise<Page> {
         const MAIN_URL = 'https://zhjwxk.cic.tsinghua.edu.cn/xkYjs.vxkYjsXkbBs.do?m=main';
         // const page = await browser.newPage();
-        const page = (await browser.pages())[0];
+        for (const page of await browser.pages()) page.close();
+        const page = await browser.newPage();
         await page.goto(MAIN_URL);
         if (page.url() != MAIN_URL) {
             async function getCaptcha() {
@@ -183,6 +184,7 @@ puppeteer.launch({headless: 'new'}).then(async browser => {
                 else throw new Error('状态异常，重新登录');
             }
         } catch (e) {
+            logger.info("抓取到异常");
             logger.info(e);
             await delay(2000);
         }
